@@ -1,0 +1,1299 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>에너지 하베스팅 시티 — SDGs 7</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap');
+
+  :root {
+    --bg:       #0D1B2A;
+    --surface:  #112236;
+    --card:     #0f1e2e;
+    --border:   #1E3A56;
+    --neon:     #39FF14;
+    --neon-dim: #1a7a08;
+    --teal:     #00E5CC;
+    --amber:    #FFB830;
+    --red:      #FF4757;
+    --blue:     #4FC3F7;
+    --purple:   #B39DDB;
+    --text:     #E8F4FD;
+    --muted:    #6B8BA4;
+    --gold:     #FFD700;
+    /* 빈 셀 전용 — 훨씬 어두운 톤 */
+    --cell-empty-bg:     #0a1520;
+    --cell-empty-border: #162333;
+    --cell-empty-icon:   0.18;   /* 이모지 opacity */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html, body {
+    width: 100%; height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    overflow: hidden; /* 스크롤 없이 16:9 고정 */
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 80%, rgba(57,255,20,.05) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 35% at 80% 10%, rgba(0,229,204,.04) 0%, transparent 55%);
+    pointer-events: none; z-index: 0;
+  }
+
+  /* ── 16:9 VIEWPORT WRAPPER ── */
+  #viewport {
+    position: relative; z-index: 1;
+    width: 100vw; height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #app {
+    /* 고정 16:9 캔버스 — 뷰포트에 맞게 scale */
+    width: 1280px; height: 720px;
+    transform-origin: center center;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 14px;
+    overflow: hidden;
+  }
+
+  /* ── TOP ROW: header + stats + gauges ── */
+  .top-row {
+    display: flex; align-items: stretch; gap: 8px;
+    flex-shrink: 0; height: 68px;
+  }
+
+  /* Header */
+  .hdr {
+    display: flex; align-items: center; gap: 10px;
+    padding: 0 18px;
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    flex-shrink: 0;
+  }
+  .hdr-icon { font-size: 22px; }
+  .hdr-title { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; color: var(--neon); letter-spacing: 1px; }
+  .hdr-sub { font-size: 9px; color: var(--muted); margin-top: 1px; }
+  .hdr-sdg { display: flex; gap: 4px; margin-left: 8px; }
+  .sdg-badge { padding: 3px 7px; border-radius: 20px; font-size: 9px; font-weight: 600; background: rgba(57,255,20,.1); color: var(--neon); border: 1px solid var(--neon-dim); }
+
+  /* Stats */
+  .stats-row {
+    display: flex; gap: 6px; flex: 1;
+  }
+  .stat-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 6px 12px;
+    display: flex; align-items: center; gap: 8px; flex: 1;
+  }
+  .stat-label { font-size: 9px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: .6px; }
+  .stat-value { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; line-height: 1; }
+  .stat-gold { color: var(--gold); }
+  .stat-turn { color: var(--blue); }
+  .stat-pop  { color: var(--purple); }
+  .stat-score{ color: var(--amber); }
+
+  /* Gauges — hidden (removed) */
+
+  /* ── MAIN AREA ── */
+  .main-area {
+    display: flex; gap: 8px; flex: 1; overflow: hidden;
+  }
+
+  /* ── LEFT COLUMN: log + city ── */
+  .left-col {
+    display: flex; flex-direction: column; gap: 8px;
+    flex: 1; overflow: hidden;
+  }
+
+  /* Log */
+  .log-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column;
+    flex: 1;
+  }
+  .panel-title {
+    padding: 7px 12px; font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .8px; color: var(--text);
+    border-bottom: 1px solid var(--border); flex-shrink: 0;
+    display: flex; align-items: center; gap: 6px;
+  }
+  #log {
+    padding: 8px 10px; overflow-y: auto; flex: 1;
+  }
+  .log-line { font-size: 11px; line-height: 1.6; padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.03); }
+  .log-line:last-child { border-bottom: none; }
+  .log-good { color: var(--neon); }
+  .log-bad  { color: var(--red); }
+  .log-info { color: var(--blue); }
+  .log-warn { color: var(--amber); }
+  .log-event{ color: var(--purple); }
+
+  /* City Grid */
+  .city-grid-wrap {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden; flex-shrink: 0;
+  }
+  #city-grid {
+    display: grid; grid-template-columns: repeat(9,1fr);
+    gap: 4px; padding: 8px;
+  }
+  /* 빈 셀 — 매우 어둡고 낮은 채도 */
+  .city-cell {
+    aspect-ratio: 1; border-radius: 6px;
+    border: 1px solid var(--cell-empty-border);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    font-size: 14px;
+    background: var(--cell-empty-bg);
+    transition: transform .15s, box-shadow .15s;
+    position: relative;
+  }
+  .city-cell .cell-emoji {
+    opacity: var(--cell-empty-icon);  /* 아이콘도 매우 흐리게 */
+    filter: grayscale(80%) brightness(0.5);
+    transition: opacity .3s, filter .3s;
+  }
+  /* 장치 설치된 셀 — 밝아짐 */
+  .city-cell.has-device {
+    background: #0d2018;
+    border-color: var(--neon-dim);
+    box-shadow: 0 0 8px rgba(57,255,20,.25);
+  }
+  .city-cell.has-device .cell-emoji {
+    opacity: 1;
+    filter: none;
+  }
+  .city-cell .cell-label { font-size: 6px; color: var(--muted); margin-top: 1px; text-align: center; line-height: 1.1; opacity: 0; }
+  .city-cell.has-device .cell-label { opacity: 1; }
+
+  /* ── RIGHT COLUMN: shop + minigames + next-btn ── */
+  .right-col {
+    display: flex; flex-direction: column; gap: 8px;
+    width: 310px; flex-shrink: 0; overflow: hidden;
+  }
+
+  /* Shop */
+  .shop-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .shop-items { padding: 6px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+  .shop-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px;
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; transition: border-color .2s, box-shadow .2s;
+  }
+  .shop-item:hover:not(.locked) { border-color: var(--neon); box-shadow: 0 0 10px rgba(57,255,20,.12); }
+  .shop-item.locked { opacity: .4; cursor: not-allowed; }
+  .shop-icon { font-size: 18px; width: 26px; text-align: center; flex-shrink: 0; }
+  .shop-info { flex: 1; min-width: 0; }
+  .shop-name { font-size: 12px; font-weight: 700; }
+  .shop-desc { font-size: 10px; color: var(--muted); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .shop-tags { display: flex; gap: 3px; margin-top: 3px; flex-wrap: wrap; }
+  .shop-tag { font-size: 9px; padding: 2px 6px; border-radius: 20px; font-weight: 600; }
+  .tag-carbon { background: rgba(57,255,20,.15);  color: var(--neon); }
+  .tag-power  { background: rgba(0,229,204,.15);  color: var(--teal); }
+  .tag-happy  { background: rgba(255,184,48,.15); color: var(--amber); }
+  .tag-cost   { background: rgba(255,215,0,.15);  color: var(--gold); }
+  .shop-buy {
+    padding: 6px 11px; border-radius: 7px; font-size: 11px; font-weight: 700;
+    border: none; cursor: pointer; white-space: nowrap;
+    background: var(--neon); color: #000;
+    transition: opacity .2s; flex-shrink: 0;
+  }
+  .shop-buy:hover { opacity: .85; }
+  .shop-buy.disabled { background: var(--border); color: var(--muted); cursor: not-allowed; }
+
+  /* 장치 설치 횟수 뱃지 */
+  .install-badge {
+    font-size: 11px; color: #000; font-weight: 700;
+    padding: 3px 10px; background: var(--amber);
+    border-radius: 20px; margin-left: auto;
+    letter-spacing: .3px;
+  }
+
+  /* Minigames */
+  .minigame-panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column;
+  }
+  .mg-list { padding: 6px; display: flex; flex-direction: column; gap: 4px; overflow-y: auto; }
+  .mg-item {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 7px 10px;
+    display: flex; align-items: center; gap: 8px;
+    cursor: pointer; transition: border-color .2s;
+  }
+  .mg-item:hover:not(.used) { border-color: var(--teal); box-shadow: 0 0 10px rgba(0,229,204,.12); }
+  .mg-item.used { opacity: .4; cursor: not-allowed; }
+  .mg-icon { font-size: 20px; width: 28px; text-align: center; flex-shrink: 0; }
+  .mg-info { flex: 1; }
+  .mg-name { font-size: 12px; font-weight: 700; }
+  .mg-desc { font-size: 10px; color: var(--muted); margin-top: 1px; }
+  .mg-reward { font-size: 11px; color: var(--gold); font-weight: 700; margin-top: 2px; }
+
+  /* ── NEXT TURN BUTTON (우측 하단 고정) ── */
+  .action-bar {
+    display: flex; gap: 6px; flex-shrink: 0;
+  }
+  .btn-next {
+    flex: 1; padding: 10px 0; border-radius: 10px;
+    font-size: 13px; font-weight: 700; border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--neon), #00E5CC);
+    color: #000; letter-spacing: .4px;
+    transition: transform .15s, box-shadow .15s;
+  }
+  .btn-next:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 4px 18px rgba(57,255,20,.35); }
+  .btn-next:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-restart {
+    padding: 10px 14px; border-radius: 10px;
+    font-size: 11px; font-weight: 700; border: 1px solid var(--border);
+    cursor: pointer; background: var(--surface); color: var(--muted);
+    transition: color .2s, border-color .2s;
+  }
+  .btn-restart:hover { color: var(--text); border-color: var(--muted); }
+
+  /* ── OVERLAYS ── */
+  .overlay {
+    position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,.72); backdrop-filter: blur(6px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .overlay.hidden { display: none; }
+
+  /* ── INTRO / TUTORIAL POPUP ── */
+  #intro-screen {
+    position: fixed; inset: 0; z-index: 300;
+    background: rgba(0,0,0,.85); backdrop-filter: blur(8px);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .intro-modal {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 20px; max-width: 560px; width: 100%; padding: 32px;
+    text-align: center;
+  }
+  .intro-logo { font-size: 48px; margin-bottom: 10px; }
+  .intro-title { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 700; color: var(--neon); margin-bottom: 4px; }
+  .intro-sub { font-size: 12px; color: var(--muted); margin-bottom: 20px; line-height: 1.6; }
+
+  /* 슬라이드 */
+  .slide { display: none; }
+  .slide.active { display: block; }
+  .slide-rules {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 14px; padding: 16px; margin-bottom: 18px; text-align: left;
+  }
+  .slide-rule { font-size: 12px; padding: 6px 0; border-bottom: 1px solid var(--border); line-height: 1.5; }
+  .slide-rule:last-child { border-bottom: none; }
+  .slide-rule span { color: var(--amber); font-weight: 700; }
+  .slide-rule b { color: var(--neon); }
+  .slide-footer { display: flex; align-items: center; justify-content: space-between; }
+  .slide-dots { display: flex; gap: 6px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background .2s; }
+  .dot.active { background: var(--neon); }
+  .btn-slide-next {
+    padding: 10px 28px; border-radius: 10px; font-size: 13px; font-weight: 700;
+    border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--neon), var(--teal));
+    color: #000; transition: transform .15s;
+  }
+  .btn-slide-next:hover { transform: translateY(-1px); }
+
+  /* ── MODAL (petition / minigame) ── */
+  .modal {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 18px; max-width: 460px; width: 100%; padding: 24px;
+  }
+  .modal-icon  { font-size: 34px; margin-bottom: 8px; }
+  .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .modal-body  { font-size: 12px; color: var(--muted); line-height: 1.7; margin-bottom: 14px; }
+  .modal-choices { display: flex; flex-direction: column; gap: 7px; }
+  .choice-btn {
+    padding: 10px 14px; border-radius: 9px; text-align: left;
+    border: 1px solid var(--border); cursor: pointer;
+    background: var(--surface); transition: border-color .2s, background .2s;
+    font-size: 11px; color: var(--text);
+  }
+  .choice-btn:hover { border-color: var(--teal); background: rgba(0,229,204,.07); }
+  .choice-title  { font-weight: 700; margin-bottom: 2px; }
+  .choice-effect { font-size: 10px; color: var(--muted); }
+
+  /* ── ENDING CARD ── */
+  .ending-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 20px; max-width: 480px; width: 100%;
+    padding: 28px; text-align: center;
+  }
+  .ending-emoji { font-size: 52px; display: block; margin-bottom: 10px; }
+  .ending-title { font-family: 'JetBrains Mono', monospace; font-size: 20px; font-weight: 700; color: var(--neon); margin-bottom: 4px; }
+  .ending-rank  { font-size: 14px; color: var(--amber); font-weight: 600; margin-bottom: 12px; }
+  .ending-body  { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
+  .ending-stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 8px; margin-bottom: 16px; }
+  .ending-stat  { background: var(--surface); border-radius: 9px; padding: 10px; }
+  .ending-stat-v { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--neon); }
+  .ending-stat-l { font-size: 9px; color: var(--muted); margin-top: 2px; }
+  .ending-sdg   { font-size: 10px; color: var(--purple); margin-bottom: 14px; line-height: 1.6; white-space: pre-line; }
+  .btn-play-again {
+    padding: 11px 28px; border-radius: 10px; font-size: 13px; font-weight: 700;
+    border: none; cursor: pointer;
+    background: linear-gradient(135deg, var(--neon), var(--teal));
+    color: #000; transition: transform .15s;
+  }
+  .btn-play-again:hover { transform: translateY(-1px); }
+
+  /* ── MINIGAME MODAL ── */
+  .mg-modal { max-width: 420px; }
+  .mg-question { font-size: 13px; font-weight: 600; margin-bottom: 12px; line-height: 1.5; }
+  .mg-options  { display: flex; flex-direction: column; gap: 6px; }
+  .mg-opt {
+    padding: 9px 12px; border-radius: 8px; border: 1px solid var(--border);
+    cursor: pointer; background: var(--surface);
+    font-size: 11px; color: var(--text); transition: border-color .2s;
+  }
+  .mg-opt:hover { border-color: var(--neon); }
+  .mg-opt.correct { border-color: var(--neon); background: rgba(57,255,20,.12); color: var(--neon); }
+  .mg-opt.wrong   { border-color: var(--red);  background: rgba(255,71,87,.09);  color: var(--red); }
+  .mg-result-text { font-size: 12px; margin-top: 10px; line-height: 1.6; }
+  .mg-continue {
+    margin-top: 12px; padding: 8px 20px; border-radius: 9px;
+    border: none; cursor: pointer; font-size: 12px; font-weight: 700;
+    background: var(--neon); color: #000;
+  }
+
+  /* ── BIG STATUS BANNER ── */
+  .status-banner {
+    display: flex; gap: 8px; flex-shrink: 0;
+  }
+  .status-big-card {
+    flex: 1; border-radius: 10px; padding: 8px 14px;
+    display: flex; align-items: center; justify-content: space-between;
+    border: 1px solid;
+  }
+  .status-big-card.carbon-card {
+    background: rgba(57,255,20,.08); border-color: var(--neon-dim);
+  }
+  .status-big-card.power-card {
+    background: rgba(0,229,204,.08); border-color: rgba(0,229,204,.35);
+  }
+  .status-big-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .6px; color: var(--muted);
+  }
+  .status-big-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 32px; font-weight: 700; line-height: 1;
+  }
+  .carbon-card .status-big-val { color: var(--neon); text-shadow: 0 0 10px rgba(57,255,20,.4); }
+  .power-card  .status-big-val { color: var(--teal);  text-shadow: 0 0 10px rgba(0,229,204,.4); }
+  .status-big-bar-wrap { width: 80px; }
+  .status-big-bar-track { height: 8px; background: var(--border); border-radius: 99px; overflow: hidden; margin-top: 4px; }
+  .status-big-bar-fill  { height: 100%; border-radius: 99px; transition: width .5s cubic-bezier(.4,0,.2,1); }
+  .carbon-card .status-big-bar-fill { background: linear-gradient(90deg, var(--neon), #b8ff75); }
+  .power-card  .status-big-bar-fill { background: linear-gradient(90deg, var(--teal), var(--blue)); }
+
+  /* Flash */
+  .flash { animation: flash-kf .3s ease; }
+  @keyframes flash-kf { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+  /* Pulse */
+  @keyframes pulse-neon { 0%,100%{text-shadow:0 0 5px var(--neon)} 50%{text-shadow:0 0 14px var(--neon)} }
+  .pulse { animation: pulse-neon 2.5s infinite; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 3px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ══ INTRO / TUTORIAL POPUP ══ -->
+<div id="intro-screen">
+  <div class="intro-modal">
+    <div class="intro-logo">🏙️</div>
+    <div class="intro-title pulse">ENERGY HARVEST CITY</div>
+    <div class="intro-sub">SDGs #7 청정에너지 · #11 지속가능한 도시 · #13 기후행동</div>
+
+    <!-- Slide 1 -->
+    <div class="slide active" id="slide-0">
+      <div class="slide-rules">
+        <div class="slide-rule">🎯 목표: <span>10턴</span> 안에 <b>탄소 배출 0%</b>, <b>전력 만족도 100%</b> 달성!</div>
+        <div class="slide-rule">💰 시작 예산: <span>100 Gold</span> — 처음엔 저렴한 장치 하나만 살 수 있어요</div>
+        <div class="slide-rule">🏗️ <b>장치 설치는 한 턴에 최대 3번</b>까지만 가능합니다</div>
+        <div class="slide-rule">📋 매 턴 <b>다음 턴 버튼</b>을 누르면 먼저 시민 민원이 뜨고, 이후 랜덤 이벤트가 발생해요</div>
+      </div>
+      <div class="slide-footer">
+        <div class="slide-dots"><div class="dot active"></div><div class="dot"></div><div class="dot"></div></div>
+        <button class="btn-slide-next" onclick="nextSlide()">다음 →</button>
+      </div>
+    </div>
+
+    <!-- Slide 2 -->
+    <div class="slide" id="slide-1">
+      <div class="slide-rules">
+        <div class="slide-rule">🎮 <b>미니게임</b>으로 Gold를 벌어 더 비싼 장치를 살 수 있어요</div>
+        <div class="slide-rule">❓ SDG 퀴즈 <span>+30G</span> · ⚡ 클릭 챌린지 <span>클릭당 +2G</span></div>
+        <div class="slide-rule">🗑️ 분리수거 게임 <span>정답당 +20G</span> · 📈 녹색 투자 <span>최대 2배 수익</span></div>
+        <div class="slide-rule">⚙️ 턴이 지날수록 설치한 장치들이 <b>자동으로 수익과 효과</b>를 냅니다</div>
+      </div>
+      <div class="slide-footer">
+        <div class="slide-dots"><div class="dot"></div><div class="dot active"></div><div class="dot"></div></div>
+        <button class="btn-slide-next" onclick="nextSlide()">다음 →</button>
+      </div>
+    </div>
+
+    <!-- Slide 3 -->
+    <div class="slide" id="slide-2">
+      <div class="slide-rules">
+        <div class="slide-rule">🌆 도시 현황 격자에서 <b>장치가 설치된 칸</b>은 초록빛으로 빛납니다</div>
+        <div class="slide-rule">📊 상단 게이지 바로 <b>탄소량과 전력 만족도</b>를 한눈에 확인하세요</div>
+        <div class="slide-rule">🏆 게임이 끝나면 플레이 결과에 따라 <b>시장 칭호</b>가 부여됩니다</div>
+        <div class="slide-rule">💡 TIP: 미니게임 Gold → 장치 설치 → 다음 턴 순서로 플레이하면 유리해요!</div>
+      </div>
+      <div class="slide-footer">
+        <div class="slide-dots"><div class="dot"></div><div class="dot"></div><div class="dot active"></div></div>
+        <button class="btn-slide-next" onclick="startGame()" style="background:linear-gradient(135deg,#39FF14,#00E5CC)">🚀 게임 시작!</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MAIN APP ══ -->
+<div id="viewport">
+<div id="app">
+
+  <!-- TOP ROW -->
+  <div class="top-row">
+    <div class="hdr">
+      <span class="hdr-icon">⚡</span>
+      <div>
+        <div class="hdr-title pulse">ENERGY HARVEST CITY</div>
+        <div class="hdr-sub">SDGs 7 · 11 · 13 — 지속가능한 에너지 도시 시뮬레이션</div>
+      </div>
+      <div class="hdr-sdg">
+        <span class="sdg-badge">SDG 7</span>
+        <span class="sdg-badge">SDG 11</span>
+        <span class="sdg-badge">SDG 13</span>
+      </div>
+    </div>
+
+    <div class="stats-row">
+      <div class="stat-card">
+        <div><div class="stat-label">💰 예산</div><div class="stat-value stat-gold" id="s-gold">100</div></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-label">📅 턴</div><div class="stat-value stat-turn" id="s-turn">1/10</div></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-label">👥 시민 만족도</div><div class="stat-value stat-pop" id="s-happy">50%</div></div>
+      </div>
+      <div class="stat-card">
+        <div><div class="stat-label">🏆 점수</div><div class="stat-value stat-score" id="s-score">0</div></div>
+      </div>
+    </div>
+
+  </div><!-- end top-row -->
+
+  <!-- MAIN AREA -->
+  <div class="main-area">
+
+    <!-- LEFT -->
+    <div class="left-col">
+      <!-- 탄소/전력 대형 표시 배너 -->
+      <div class="status-banner">
+        <div class="status-big-card carbon-card">
+          <div>
+            <div class="status-big-label">🌫️ 탄소 배출량</div>
+            <div class="status-big-val" id="sb-carbon">100%</div>
+          </div>
+          <div class="status-big-bar-wrap">
+            <div style="font-size:9px;color:var(--muted);text-align:right">목표: 0%</div>
+            <div class="status-big-bar-track"><div class="status-big-bar-fill" id="sb-carbon-bar" style="width:100%"></div></div>
+          </div>
+        </div>
+        <div class="status-big-card power-card">
+          <div>
+            <div class="status-big-label">⚡ 전력 만족도</div>
+            <div class="status-big-val" id="sb-power">0%</div>
+          </div>
+          <div class="status-big-bar-wrap">
+            <div style="font-size:9px;color:var(--muted);text-align:right">목표: 100%</div>
+            <div class="status-big-bar-track"><div class="status-big-bar-fill" id="sb-power-bar" style="width:0%"></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="log-panel">
+        <div class="panel-title">📋 도시 일지</div>
+        <div id="log"></div>
+      </div>
+      <div class="city-grid-wrap">
+        <div class="panel-title">🏙️ 도시 현황 <span style="font-size:9px;color:var(--neon-dim);margin-left:6px">■ 설치됨</span><span style="font-size:9px;color:var(--cell-empty-border);margin-left:6px">□ 빈 구역</span></div>
+        <div id="city-grid"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT -->
+    <div class="right-col">
+
+      <div class="shop-panel">
+        <div class="panel-title">🏗️ 장치 설치 <span class="install-badge" id="install-badge">이번 턴 0/3회</span></div>
+        <div class="shop-items" id="shop-items"></div>
+      </div>
+
+      <div class="minigame-panel">
+        <div class="panel-title">🎮 미니게임 (Gold 획득)</div>
+        <div class="mg-list" id="mg-list"></div>
+      </div>
+
+      <div class="action-bar">
+        <button class="btn-next" id="btn-next" onclick="nextTurn()">⏭ 다음 턴으로 →</button>
+        <button class="btn-restart" onclick="location.reload()">↺</button>
+      </div>
+
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- PETITION OVERLAY -->
+<div class="overlay hidden" id="petition-overlay">
+  <div class="modal">
+    <div class="modal-icon" id="pet-icon">📢</div>
+    <div class="modal-title" id="pet-title">시민 민원</div>
+    <div class="modal-body"  id="pet-body"></div>
+    <div class="modal-choices" id="pet-choices"></div>
+  </div>
+</div>
+
+<!-- MINIGAME OVERLAY -->
+<div class="overlay hidden" id="mg-overlay">
+  <div class="modal mg-modal">
+    <div class="modal-icon" id="mg-icon">🎮</div>
+    <div class="modal-title" id="mg-title"></div>
+    <div class="modal-body"  id="mg-intro"></div>
+    <div id="mg-content"></div>
+  </div>
+</div>
+
+<!-- ENDING OVERLAY -->
+<div class="overlay hidden" id="ending-overlay">
+  <div class="ending-card">
+    <span class="ending-emoji" id="end-emoji">🏅</span>
+    <div class="ending-title" id="end-title">게임 종료</div>
+    <div class="ending-rank"  id="end-rank"></div>
+    <div class="ending-body"  id="end-body"></div>
+    <div class="ending-stats">
+      <div class="ending-stat"><div class="ending-stat-v" id="end-score">0</div><div class="ending-stat-l">최종 점수</div></div>
+      <div class="ending-stat"><div class="ending-stat-v" id="end-carbon">?</div><div class="ending-stat-l">잔여 탄소</div></div>
+      <div class="ending-stat"><div class="ending-stat-v" id="end-power">?</div><div class="ending-stat-l">전력 만족도</div></div>
+    </div>
+    <div class="ending-sdg" id="end-sdg"></div>
+    <button class="btn-play-again" onclick="location.reload()">🔄 다시 시작</button>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+//  16:9 SCALE FIT
+// ══════════════════════════════════════════════
+function fitApp() {
+  const app = document.getElementById('app');
+  const scaleX = window.innerWidth  / 1280;
+  const scaleY = window.innerHeight / 720;
+  const scale  = Math.min(scaleX, scaleY);
+  app.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', fitApp);
+fitApp();
+
+// ══════════════════════════════════════════════
+//  TUTORIAL SLIDES
+// ══════════════════════════════════════════════
+let currentSlide = 0;
+function nextSlide() {
+  const slides = document.querySelectorAll('.slide');
+  slides[currentSlide].classList.remove('active');
+  currentSlide++;
+  if (currentSlide < slides.length) {
+    slides[currentSlide].classList.add('active');
+  }
+}
+
+// ══════════════════════════════════════════════
+//  GAME STATE
+// ══════════════════════════════════════════════
+const GS = {
+  gold: 100,
+  turn: 1,
+  maxTurn: 10,
+  carbon: 100,
+  power: 0,
+  happy: 50,
+  score: 0,
+  devices: [],
+  mgUsed: {},
+  investUsed: {},   // ← 투자 항목별 사용 여부 (턴 리셋 안 됨, 게임 전체)
+  petitionDone: false,
+  gameOver: false,
+  installsThisTurn: 0,   // ← 턴당 장치 설치 횟수
+  maxInstalls: 3,
+};
+
+// ══════════════════════════════════════════════
+//  SHOP DATA
+// ══════════════════════════════════════════════
+const SHOP = [
+  { id:'piezo',  icon:'🚶', name:'압전 보도블록',      desc:'보행자 발걸음으로 미세 전력 생산',    cost:50,  carbonReduce:5,  powerGain:8,  happyGain:3, tags:['탄소 -5%','전력 +8','만족 +3'],   tagTypes:['carbon','power','happy'] },
+  { id:'noise',  icon:'🔊', name:'소음 하베스팅 벽',   desc:'도로 소음을 전기로 변환',            cost:70,  carbonReduce:8,  powerGain:10, happyGain:2, tags:['탄소 -8%','전력 +10','만족 +2'],  tagTypes:['carbon','power','happy'] },
+  { id:'solar',  icon:'☀️', name:'건물 일체형 태양광', desc:'BIPV — 건물 외벽 전체가 태양전지',  cost:120, carbonReduce:15, powerGain:18, happyGain:5, tags:['탄소 -15%','전력 +18','만족 +5'], tagTypes:['carbon','power','happy'] },
+  { id:'wind',   icon:'🌀', name:'소형 수직 풍력',     desc:'건물 옥상 수직축 터빈',              cost:90,  carbonReduce:10, powerGain:14, happyGain:4, tags:['탄소 -10%','전력 +14','만족 +4'], tagTypes:['carbon','power','happy'] },
+  { id:'bio',    icon:'♻️', name:'바이오가스 플랜트',  desc:'음식물 쓰레기를 가스로 전환',        cost:150, carbonReduce:20, powerGain:15, happyGain:6, tags:['탄소 -20%','전력 +15','만족 +6'], tagTypes:['carbon','power','happy'] },
+  { id:'hydro',  icon:'💧', name:'소수력 발전',         desc:'도시 수로의 흐름으로 발전',           cost:200, carbonReduce:25, powerGain:22, happyGain:8, tags:['탄소 -25%','전력 +22','만족 +8'], tagTypes:['carbon','power','happy'] },
+];
+
+// ══════════════════════════════════════════════
+//  MINIGAMES
+// ══════════════════════════════════════════════
+const MINIGAMES = [
+  {
+    id:'quiz', icon:'❓', name:'SDG 퀴즈', desc:'SDGs 문제를 맞히면 Gold!', reward:'정답 시 +30 Gold', type:'quiz',
+    questions:[
+      { q:'SDGs 목표 7은 무엇을 다루나요?', options:['깨끗한 물과 위생','저렴하고 청정한 에너지','기후 행동','해양 생태계'], ans:1 },
+      { q:'재생에너지 중 태양광 발전의 원리는?', options:['열을 이용','소음 에너지','광전효과(빛→전기)','수압'], ans:2 },
+      { q:'압전 소자(Piezoelectric)는 무엇을 전기로 바꾸나요?', options:['열','빛','압력/진동','자기장'], ans:2 },
+      { q:'SDGs는 몇 개의 목표로 이루어져 있나요?', options:['10개','17개','20개','30개'], ans:1 },
+      { q:'탄소중립(Carbon Neutral)의 의미는?', options:['탄소를 전혀 배출 안 함','배출=흡수로 순 배출 0','탄소세 납부','화석연료 사용 금지'], ans:1 },
+      { q:'에너지 하베스팅이란?', options:['에너지를 저장만 함','주변 환경에서 에너지를 수확·변환','에너지를 수출함','배터리를 만드는 것'], ans:1 },
+      { q:'SDG 11은 어떤 목표인가요?', options:['기아 종식','지속가능한 도시와 공동체','깨끗한 에너지','육지 생태계 보전'], ans:1 },
+      { q:'온실가스 중 가장 많은 비중을 차지하는 것은?', options:['메탄(CH₄)','이산화탄소(CO₂)','아산화질소(N₂O)','수증기'], ans:1 },
+      { q:'2015년 채택된 기후변화 국제협약의 이름은?', options:['교토의정서','몬트리올의정서','파리협정','리우협약'], ans:2 },
+      { q:'풍력 발전의 원리로 올바른 것은?', options:['바람으로 터빈 회전 → 발전기 구동','태양열로 물 가열','압력차로 전류 발생','마찰력 이용'], ans:0 },
+      { q:'SDG 13은 무엇에 관한 목표인가요?', options:['빈곤 퇴치','기후 행동','양질의 교육','육지 생태계'], ans:1 },
+      { q:'BIPV란 무엇의 약자인가요?', options:['바이오 가스 발전소','건물 일체형 태양광 발전','배터리 일체형 전력망','대형 산업 태양광'], ans:1 },
+      { q:'소음 에너지 하베스팅에 주로 사용되는 소자는?', options:['태양전지','압전소자','연료전지','열전소자'], ans:1 },
+      { q:'1kWh는 몇 Wh인가요?', options:['10 Wh','100 Wh','1000 Wh','10000 Wh'], ans:2 },
+      { q:'지열 에너지는 어디서 얻나요?', options:['바다 파도','땅속 열에너지','빗물','태양빛 반사'], ans:1 },
+      { q:'SDG 6은 무엇에 관한 목표인가요?', options:['기아 종식','깨끗한 물과 위생','해양 생태계','에너지'], ans:1 },
+      { q:'재생에너지가 아닌 것은?', options:['태양광','풍력','천연가스','수력'], ans:2 },
+      { q:'탄소 발자국(Carbon Footprint)이란?', options:['탄소 배출 총량 지표','탄소 흡수 식물 수','화석연료 가격','탄소세율'], ans:0 },
+      { q:'파리협정에서 목표하는 지구 온도 상승 제한은?', options:['0.5°C 이내','1.5°C 이내','2.5°C 이내','3°C 이내'], ans:1 },
+      { q:'수소 연료전지의 부산물로 나오는 것은?', options:['이산화탄소','질소','물(H₂O)','황산화물'], ans:2 },
+      { q:'스마트그리드(Smart Grid)란?', options:['고압 송전탑 네트워크','디지털 기술로 전력망을 지능화한 시스템','태양광 패널 배열','배터리 저장 장치'], ans:1 },
+      { q:'ESG 중 E는 무엇을 의미하나요?', options:['Economy(경제)','Environment(환경)','Energy(에너지)','Engineering(공학)'], ans:1 },
+      { q:'조력 발전의 에너지원은?', options:['바람','밀물과 썰물','강물의 흐름','지열'], ans:1 },
+      { q:'LED 조명이 기존 백열전구보다 에너지 효율이 높은 이유는?', options:['더 밝기 때문','열 손실이 적어 전기→빛 전환율이 높기 때문','수명이 짧기 때문','색온도가 높기 때문'], ans:1 },
+      { q:'SDG 2는 무엇에 관한 목표인가요?', options:['빈곤 퇴치','기아 종식','양질의 교육','건강과 웰빙'], ans:1 },
+      { q:'온실효과를 일으키는 가스가 아닌 것은?', options:['이산화탄소(CO₂)','메탄(CH₄)','산소(O₂)','수증기(H₂O)'], ans:2 },
+      { q:'바이오매스 에너지의 원료로 적합하지 않은 것은?', options:['음식물 쓰레기','농업 부산물','플라스틱 폐기물','목재 펠릿'], ans:2 },
+      { q:'제로에너지빌딩(ZEB)의 핵심 개념은?', options:['건물 내 에너지 생산량 ≥ 소비량','건물에 창문이 없음','태양광만 사용','지하에 지어진 건물'], ans:0 },
+      { q:'에너지 믹스(Energy Mix)란?', options:['에너지 음료의 성분','국가나 지역이 사용하는 에너지원의 구성 비율','전기와 가스를 섞는 기술','배터리 종류'], ans:1 },
+      { q:'넷제로(Net Zero)와 탄소중립의 차이점은?', options:['완전히 다른 개념','넷제로는 모든 온실가스 포함, 탄소중립은 CO₂만','탄소중립이 더 넓은 개념','동일한 개념'], ans:1 },
+    ]
+  },
+  {
+    id:'click', icon:'⚡', name:'에너지 클릭 챌린지', desc:'5초 안에 버튼을 최대한 많이 클릭!', reward:'클릭 1회당 +2 Gold', type:'click',
+  },
+  {
+    id:'sort', icon:'🗑️', name:'분리수거 게임', desc:'쓰레기를 올바른 통에 분류해요', reward:'정답당 +20 Gold', type:'sort',
+    items:[
+      // 재활용
+      {name:'빈 페트병 🍼',    ans:'재활용'}, {name:'신문지 📰',       ans:'재활용'},
+      {name:'스티로폼 상자 📦', ans:'재활용'}, {name:'유리병 🍾',       ans:'재활용'},
+      {name:'알루미늄캔 🥫',   ans:'재활용'}, {name:'종이컵 ☕',        ans:'재활용'},
+      {name:'골판지 📬',       ans:'재활용'}, {name:'투명 플라스틱 🧴', ans:'재활용'},
+      // 음식물
+      {name:'음식물 찌꺼기 🍚', ans:'음식물'}, {name:'치킨뼈 🍗',   ans:'음식물'},
+      {name:'달걀 껍데기 🥚',  ans:'음식물'}, {name:'과일 껍질 🍊', ans:'음식물'},
+      {name:'채소 꼭지 🥦',    ans:'음식물'}, {name:'생선 뼈 🐟',   ans:'음식물'},
+      // 일반
+      {name:'깨진 유리컵 🥃',  ans:'일반'}, {name:'영수증 🧾',         ans:'일반'},
+      {name:'오염된 포장지 🎁', ans:'일반'}, {name:'1회용 기저귀 🍼',  ans:'일반'},
+      {name:'담배꽁초 🚬',     ans:'일반'}, {name:'코팅된 종이 📄',    ans:'일반'},
+      // 특수
+      {name:'AA 건전지 🔋',    ans:'특수'}, {name:'형광등 💡',     ans:'특수'},
+      {name:'체온계 🌡️',       ans:'특수'}, {name:'스프레이 캔 🫙', ans:'특수'},
+    ]
+  },
+  {
+    id:'invest', icon:'📈', name:'녹색 투자 게임', desc:'두 녹색 기업 중 좋은 곳에 투자', reward:'성공 시 투자금의 최대 2배 반환', type:'invest',
+  },
+];
+
+// ══════════════════════════════════════════════
+//  PETITIONS
+// ══════════════════════════════════════════════
+const PETITIONS = [
+  { icon:'🏭', title:'공장 소음 민원', body:'도심 공장에서 밤새 소음이 납니다. 주민들이 항의하고 있어요!',
+    choices:[ {label:'소음 하베스팅 벽 설치 약속', effect:'gold:-20,happy:+15,carbon:-3', desc:'Gold -20 · 만족 +15 · 탄소 -3%'}, {label:'무시하고 공장 가동 유지', effect:'happy:-10', desc:'만족 -10'} ] },
+  { icon:'🌳', title:'공원 녹지 요청', body:'시민들이 도심 공원 확충을 원합니다.',
+    choices:[ {label:'도시 숲 프로젝트 시작 (-30G)', effect:'gold:-30,carbon:-8,happy:+12', desc:'Gold -30 · 탄소 -8% · 만족 +12'}, {label:'예산 없어 거절', effect:'happy:-8', desc:'만족 -8'} ] },
+  { icon:'🚗', title:'전기차 충전소 부족', body:'전기차 보급이 늘었는데 충전소가 없어요!',
+    choices:[ {label:'태양광 충전소 설치 (-40G)', effect:'gold:-40,power:+10,happy:+10,carbon:-5', desc:'Gold -40 · 전력 +10 · 만족 +10'}, {label:'민간에 맡기겠다', effect:'happy:-5', desc:'만족 -5'} ] },
+  { icon:'🌊', title:'홍수 피해 복구', body:'기후변화로 침수 피해가 발생했습니다!',
+    choices:[ {label:'긴급 예산 투입 (-50G)', effect:'gold:-50,happy:+20', desc:'Gold -50 · 만족 +20'}, {label:'국가 재난 지원 대기', effect:'happy:-15,carbon:+5', desc:'만족 -15 · 탄소 +5%'} ] },
+  { icon:'💡', title:'에너지 절약 캠페인', body:'시민 단체가 에너지 절약 캠페인을 제안합니다.',
+    choices:[ {label:'시 예산 지원 (-20G)', effect:'gold:-20,power:+8,happy:+8,carbon:-6', desc:'Gold -20 · 전력 +8 · 탄소 -6%'}, {label:'자발적 참여에 맡김', effect:'carbon:-2,happy:+2', desc:'탄소 -2% · 만족 +2'} ] },
+  { icon:'🏫', title:'학교 태양광 교육', body:'초등학교에서 에너지 교육 프로그램을 요청합니다.',
+    choices:[ {label:'태양광 패널 + 교육 (-35G)', effect:'gold:-35,power:+12,happy:+10,carbon:-4', desc:'Gold -35 · 전력 +12 · 탄소 -4%'}, {label:'교재만 지원 (-10G)', effect:'gold:-10,happy:+5', desc:'Gold -10 · 만족 +5'} ] },
+  { icon:'🌙', title:'야간 가로등 절전', body:'새벽 가로등이 너무 밝아 수면을 방해합니다.',
+    choices:[ {label:'LED 스마트 조명 교체 (-25G)', effect:'gold:-25,carbon:-7,happy:+12', desc:'Gold -25 · 탄소 -7% · 만족 +12'}, {label:'현재 유지', effect:'happy:-3', desc:'만족 -3'} ] },
+  { icon:'🏗️', title:'재개발 vs 생태 보존', body:'구시가지 재개발 vs 생태 공원 보존으로 의견이 갈립니다.',
+    choices:[ {label:'생태 공원 보존', effect:'carbon:-10,happy:+8', desc:'탄소 -10% · 만족 +8'}, {label:'친환경 건물 재개발 (-60G)', effect:'gold:-60,power:+20,carbon:-8,happy:+5', desc:'Gold -60 · 전력 +20 · 탄소 -8%'} ] },
+  { icon:'🚲', title:'자전거 도로 요청', body:'시민들이 자전거 도로 확충을 요청합니다.',
+    choices:[ {label:'자전거 도로 건설 (-30G)', effect:'gold:-30,carbon:-6,happy:+14', desc:'Gold -30 · 탄소 -6% · 만족 +14'}, {label:'다음으로 미루기', effect:'happy:-6', desc:'만족 -6'} ] },
+  { icon:'🌡️', title:'폭염 대피소 요청', body:'폭염이 심해져 대피소가 필요합니다.',
+    choices:[ {label:'냉방 대피소 운영 (-20G)', effect:'gold:-20,happy:+10', desc:'Gold -20 · 만족 +10'}, {label:'개인 대처에 맡김', effect:'happy:-12', desc:'만족 -12'} ] },
+  { icon:'🚌', title:'친환경 버스 도입 요청', body:'시내버스를 전기버스로 교체해달라는 민원입니다.',
+    choices:[ {label:'전기버스 시범 도입 (-45G)', effect:'gold:-45,carbon:-12,happy:+10', desc:'Gold -45 · 탄소 -12% · 만족 +10'}, {label:'기존 디젤버스 유지', effect:'happy:-8,carbon:+4', desc:'만족 -8 · 탄소 +4%'} ] },
+  { icon:'🏚️', title:'노후 건물 단열 요청', body:'오래된 주거지역에서 단열 개선을 요청합니다.',
+    choices:[ {label:'단열 리모델링 지원 (-35G)', effect:'gold:-35,power:+8,happy:+12,carbon:-5', desc:'Gold -35 · 전력 +8 · 탄소 -5%'}, {label:'민간 자율 추진', effect:'happy:-5', desc:'만족 -5'} ] },
+  { icon:'🌬️', title:'미세먼지 저감 대책', body:'미세먼지가 심각해 시민들이 외출을 꺼립니다.',
+    choices:[ {label:'도심 집진 장치 설치 (-30G)', effect:'gold:-30,carbon:-8,happy:+14', desc:'Gold -30 · 탄소 -8% · 만족 +14'}, {label:'마스크 무료 배부 (-10G)', effect:'gold:-10,happy:+4', desc:'Gold -10 · 만족 +4'} ] },
+  { icon:'🍽️', title:'음식물 쓰레기 처리', body:'음식물 쓰레기가 넘쳐 악취와 위생 문제가 발생했습니다.',
+    choices:[ {label:'바이오가스 플랜트 연계 (-25G)', effect:'gold:-25,power:+10,carbon:-7,happy:+10', desc:'Gold -25 · 전력 +10 · 탄소 -7%'}, {label:'매립지 추가 확보 (-15G)', effect:'gold:-15,carbon:+6,happy:-4', desc:'Gold -15 · 탄소 +6% · 만족 -4'} ] },
+  { icon:'🏊', title:'수영장 태양열 가열', body:'공공 수영장 난방 비용이 너무 높습니다. 대안을 요구합니다.',
+    choices:[ {label:'태양열 집열판 설치 (-40G)', effect:'gold:-40,carbon:-10,happy:+12', desc:'Gold -40 · 탄소 -10% · 만족 +12'}, {label:'이용료 인상', effect:'happy:-10', desc:'만족 -10'} ] },
+  { icon:'📡', title:'스마트 전력계 요청', body:'전력 사용량을 실시간으로 확인할 수 있는 스마트 계량기를 요청합니다.',
+    choices:[ {label:'스마트 미터 전 가구 보급 (-30G)', effect:'gold:-30,power:+12,happy:+8,carbon:-4', desc:'Gold -30 · 전력 +12 · 탄소 -4%'}, {label:'신청자에게만 제공 (-10G)', effect:'gold:-10,power:+4,happy:+3', desc:'Gold -10 · 전력 +4 · 만족 +3'} ] },
+  { icon:'🏭', title:'산업단지 이전 요청', body:'도심 산업단지 이전을 요구하는 주민 집회가 열렸습니다.',
+    choices:[ {label:'친환경 공원으로 전환 (-55G)', effect:'gold:-55,carbon:-15,happy:+18', desc:'Gold -55 · 탄소 -15% · 만족 +18'}, {label:'현 위치 유지·소음 규제 (-10G)', effect:'gold:-10,happy:+3', desc:'Gold -10 · 만족 +3'} ] },
+  { icon:'🌱', title:'옥상 텃밭 프로젝트', body:'시민들이 공공건물 옥상을 텃밭으로 활용하자고 제안합니다.',
+    choices:[ {label:'옥상 텃밭 + 태양광 복합 설치 (-20G)', effect:'gold:-20,carbon:-6,happy:+14', desc:'Gold -20 · 탄소 -6% · 만족 +14'}, {label:'안전 이유로 거절', effect:'happy:-7', desc:'만족 -7'} ] },
+  { icon:'🚦', title:'교통신호 에너지 절감', body:'교통신호등 전력 비용 절감 방안을 마련해달라는 요청입니다.',
+    choices:[ {label:'태양광 신호등으로 교체 (-20G)', effect:'gold:-20,carbon:-5,happy:+8', desc:'Gold -20 · 탄소 -5% · 만족 +8'}, {label:'심야 점멸 모드만 적용', effect:'carbon:-2,happy:+3', desc:'탄소 -2% · 만족 +3'} ] },
+  { icon:'🌊', title:'수변 공간 재생 사업', body:'방치된 강변 부지를 시민 공간으로 재생하자는 요청이 들어왔습니다.',
+    choices:[ {label:'수상 태양광 + 산책로 조성 (-50G)', effect:'gold:-50,power:+14,carbon:-8,happy:+16', desc:'Gold -50 · 전력 +14 · 탄소 -8% · 만족 +16'}, {label:'주차장으로 개발 (-10G)', effect:'gold:-10,happy:-5,carbon:+4', desc:'Gold -10 · 만족 -5 · 탄소 +4%'} ] },
+];
+
+// ══════════════════════════════════════════════
+//  RANDOM EVENTS
+// ══════════════════════════════════════════════
+const EVENTS = [
+  { icon:'☀️', msg:'강한 햇살! 태양광 효율 +15% 보너스', power:8, carbon:-4 },
+  { icon:'💨', msg:'강풍 주의보! 풍력 발전 급증', power:10, carbon:-3 },
+  { icon:'🌧️', msg:'흐린 날씨... 태양광 효율 하락', power:-6, carbon:4 },
+  { icon:'🔥', msg:'폭염 경보! 전력 소비 급증', power:-8, happy:-5 },
+  { icon:'🌊', msg:'집중호우로 소수력 발전 과잉', power:12, carbon:-2 },
+  { icon:'🤝', msg:'국제 기후 펀드 지원! 보조금 획득', gold:40 },
+  { icon:'📉', msg:'에너지 시장 불안정... 운영 비용 발생', gold:-20 },
+  { icon:'🏆', msg:'친환경 도시 인증! 관광객 유입', gold:30, happy:8 },
+  { icon:'🦠', msg:'미세먼지 경보! 탄소 감축 압박', carbon:6, happy:-8 },
+  { icon:'🌿', msg:'시민 자발적 절전 캠페인 성공!', power:5, carbon:-5, happy:5 },
+];
+
+// ── City Grid ──
+const CITY_ICONS = ['🏠','🏢','🏪','🌳','🏫','🏥','🏦','🏨','🏛️','🏬','🏰','🏟️','🌆','🏙️','🏗️','🌃','🏘️','🌉'];
+let cityGrid = [];
+
+// ══════════════════════════════════════════════
+//  START GAME
+// ══════════════════════════════════════════════
+function startGame() {
+  document.getElementById('intro-screen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  fitApp();
+  initCityGrid();
+  renderShop();
+  renderMinigames();
+  updateUI();
+  addLog('🏙️ 신도시의 초대 시장으로 취임했습니다! 예산 100 Gold로 출발!', 'info');
+  addLog('💡 미니게임으로 Gold를 먼저 확보한 뒤 장치를 설치하세요.', 'warn');
+}
+
+// ── City Grid Init ──
+function initCityGrid() {
+  const grid = document.getElementById('city-grid');
+  grid.innerHTML = '';
+  cityGrid = [];
+  for (let i = 0; i < 27; i++) {
+    const icon = CITY_ICONS[Math.floor(Math.random() * CITY_ICONS.length)];
+    cityGrid.push({ icon, device: null });
+    const cell = document.createElement('div');
+    cell.className = 'city-cell';
+    cell.id = `cell-${i}`;
+    cell.innerHTML = `<span class="cell-emoji">${icon}</span><span class="cell-label"></span>`;
+    grid.appendChild(cell);
+  }
+}
+
+function addDeviceToGrid(device) {
+  const empty = cityGrid.findIndex(c => !c.device);
+  if (empty === -1) return;
+  cityGrid[empty].device = device;
+  const cell = document.getElementById(`cell-${empty}`);
+  cell.innerHTML = `<span class="cell-emoji">${device.icon}</span><span class="cell-label">${device.name.slice(0,4)}</span>`;
+  cell.classList.add('has-device', 'flash');
+}
+
+// ══════════════════════════════════════════════
+//  UI
+// ══════════════════════════════════════════════
+function updateUI() {
+  document.getElementById('s-gold').textContent  = GS.gold;
+  document.getElementById('s-turn').textContent  = `${GS.turn}/10`;
+  document.getElementById('s-happy').textContent = `${clamp(GS.happy,0,100)}%`;
+  document.getElementById('s-score').textContent = GS.score;
+
+  const carbon = clamp(GS.carbon, 0, 100);
+  const power  = clamp(GS.power,  0, 100);
+  // 대형 배너 업데이트
+  document.getElementById('sb-carbon').textContent = `${carbon}%`;
+  document.getElementById('sb-carbon-bar').style.width = `${carbon}%`;
+  document.getElementById('sb-power').textContent  = `${power}%`;
+  document.getElementById('sb-power-bar').style.width  = `${power}%`;
+
+  document.getElementById('install-badge').textContent = `이번 턴 ${GS.installsThisTurn}/${GS.maxInstalls}회`;
+
+  renderShop();
+  renderMinigames();
+}
+
+function clamp(v, mn, mx) { return Math.max(mn, Math.min(mx, v)); }
+
+function addLog(msg, type='') {
+  const log = document.getElementById('log');
+  const d = document.createElement('div');
+  d.className = `log-line ${type ? 'log-'+type : ''}`;
+  d.textContent = msg;
+  log.prepend(d);
+}
+
+// ══════════════════════════════════════════════
+//  SHOP
+// ══════════════════════════════════════════════
+function renderShop() {
+  const container = document.getElementById('shop-items');
+  container.innerHTML = '';
+  const installLimitReached = GS.installsThisTurn >= GS.maxInstalls;
+  SHOP.forEach(item => {
+    const canBuy = GS.gold >= item.cost && !GS.gameOver && !installLimitReached;
+    const div = document.createElement('div');
+    div.className = 'shop-item' + (canBuy ? '' : ' locked');
+    div.innerHTML = `
+      <div class="shop-icon">${item.icon}</div>
+      <div class="shop-info">
+        <div class="shop-name">${item.name}</div>
+        <div class="shop-desc">${item.desc}</div>
+        <div class="shop-tags">
+          ${item.tags.map((t,i)=>`<span class="shop-tag tag-${item.tagTypes[i]}">${t}</span>`).join('')}
+        </div>
+      </div>
+      <button class="shop-buy ${canBuy?'':'disabled'}" onclick="buyDevice('${item.id}')">구매 · ${item.cost}G</button>
+    `;
+    container.appendChild(div);
+  });
+}
+
+function buyDevice(id) {
+  if (GS.installsThisTurn >= GS.maxInstalls) {
+    addLog('⚠️ 이번 턴 장치 설치 한도(3회)에 달했습니다. 다음 턴에 설치하세요.', 'warn');
+    return;
+  }
+  const item = SHOP.find(s => s.id === id);
+  if (!item || GS.gold < item.cost || GS.gameOver) return;
+  GS.gold    -= item.cost;
+  GS.carbon   = clamp(GS.carbon - item.carbonReduce, 0, 100);
+  GS.power    = clamp(GS.power  + item.powerGain,    0, 100);
+  GS.happy    = clamp(GS.happy  + item.happyGain,    0, 100);
+  GS.score   += Math.floor((item.carbonReduce + item.powerGain) * 10);
+  GS.devices.push(item);
+  GS.installsThisTurn++;
+  addDeviceToGrid(item);
+  addLog(`🏗️ [${item.name}] 설치! 탄소 -${item.carbonReduce}% · 전력 +${item.powerGain} (이번 턴 ${GS.installsThisTurn}/${GS.maxInstalls}회)`, 'good');
+  updateUI();
+  checkWin();
+}
+
+// ══════════════════════════════════════════════
+//  MINIGAMES
+// ══════════════════════════════════════════════
+function renderMinigames() {
+  const container = document.getElementById('mg-list');
+  container.innerHTML = '';
+  MINIGAMES.forEach(mg => {
+    const used = GS.mgUsed[mg.id];
+    const div = document.createElement('div');
+    div.className = 'mg-item' + (used || GS.gameOver ? ' used' : '');
+    div.innerHTML = `
+      <div class="mg-icon">${mg.icon}</div>
+      <div class="mg-info">
+        <div class="mg-name">${mg.name}${used?' ✓':''}</div>
+        <div class="mg-desc">${mg.desc}</div>
+        <div class="mg-reward">${mg.reward}</div>
+      </div>
+    `;
+    if (!used && !GS.gameOver) div.onclick = () => openMinigame(mg.id);
+    container.appendChild(div);
+  });
+}
+
+// ── Quiz State ──
+let quizState = {};
+
+function openMinigame(id) {
+  const mg = MINIGAMES.find(m => m.id === id);
+  document.getElementById('mg-icon').textContent  = mg.icon;
+  document.getElementById('mg-title').textContent = mg.name;
+  document.getElementById('mg-overlay').classList.remove('hidden');
+
+  // ── QUIZ ──
+  if (mg.type === 'quiz') {
+    const q = mg.questions[Math.floor(Math.random() * mg.questions.length)];
+    quizState = { mg, q, answered: false };
+    document.getElementById('mg-intro').textContent = 'SDGs 관련 퀴즈! 정답을 맞히면 +30 Gold';
+    document.getElementById('mg-content').innerHTML = `
+      <div class="mg-question">${q.q}</div>
+      <div class="mg-options">
+        ${q.options.map((o,i)=>`<div class="mg-opt" id="qopt-${i}" onclick="answerQuiz(${i})">${o}</div>`).join('')}
+      </div>
+      <div class="mg-result-text" id="mg-result"></div>
+    `;
+  }
+
+  // ── CLICK ──
+  else if (mg.type === 'click') {
+    let clicks = 0, active = true;
+    document.getElementById('mg-intro').textContent = '5초 안에 버튼을 최대한 많이 클릭하세요!';
+    document.getElementById('mg-content').innerHTML = `
+      <div style="text-align:center">
+        <div id="click-count" style="font-family:'JetBrains Mono',monospace;font-size:32px;color:var(--neon);margin-bottom:8px">0</div>
+        <div id="click-timer" style="font-size:11px;color:var(--muted);margin-bottom:10px">⏱ 5.0초</div>
+        <button id="click-btn" style="padding:14px 28px;font-size:16px;font-weight:700;border-radius:10px;border:none;cursor:pointer;background:var(--neon);color:#000">⚡ 클릭!</button>
+        <div id="click-result" style="margin-top:10px;font-size:12px;color:var(--muted)"></div>
+      </div>
+    `;
+    document.getElementById('click-btn').onclick = () => {
+      if (!active) return;
+      clicks++;
+      document.getElementById('click-count').textContent = clicks;
+    };
+    let time = 5;
+    const iv = setInterval(() => {
+      time -= 0.1;
+      if (time <= 0) {
+        clearInterval(iv); active = false;
+        document.getElementById('click-btn').disabled = true;
+        const earned = clicks * 2;
+        GS.gold += earned; GS.score += Math.floor(earned / 2);
+        GS.mgUsed[mg.id] = true;
+        document.getElementById('click-result').innerHTML = `
+          <span style="color:var(--gold);font-weight:700">${clicks}번 클릭! +${earned} Gold 획득!</span>
+          <br><button class="mg-continue" onclick="closeMg()">닫기</button>
+        `;
+        addLog(`⚡ 클릭 챌린지 ${clicks}번! +${earned} Gold`, 'good');
+        updateUI();
+      } else {
+        const el = document.getElementById('click-timer');
+        if (el) el.textContent = `⏱ ${time.toFixed(1)}초`;
+      }
+    }, 100);
+  }
+
+  // ── SORT (3가지 카테고리, 3문제) ──
+  else if (mg.type === 'sort') {
+    const cats = ['재활용','음식물','일반'];
+    // 3가지 카테고리 해당 항목만 필터 후 랜덤 3개 선택
+    const filteredItems = mg.items.filter(it => cats.includes(it.ans));
+    const picked = [...filteredItems].sort(() => Math.random() - .5).slice(0, 3);
+    window._sortScore = 0; window._sortAnswered = 0;
+    window._sortTotal = picked.length; window._sortMg = mg;
+
+    document.getElementById('mg-intro').textContent = '쓰레기를 올바른 분리수거 통에 분류하세요! (3가지)';
+    document.getElementById('mg-content').innerHTML = `
+      <div id="sort-items" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div id="sort-result" style="margin-top:8px;font-size:12px"></div>
+    `;
+    const si = document.getElementById('sort-items');
+    picked.forEach((item, idx) => {
+      const d = document.createElement('div');
+      d.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 12px';
+      d.innerHTML = `
+        <div style="font-size:12px;font-weight:700;margin-bottom:7px">${item.name}</div>
+        <div style="display:flex;gap:6px">
+          ${cats.map(c=>`<button class="mg-opt" id="sort-${idx}-${c}" onclick="sortAnswer(${idx},'${c}','${item.ans}',${picked.length})" style="flex:1;padding:6px 4px;text-align:center;font-size:11px;font-weight:600;min-width:0">${c}</button>`).join('')}
+        </div>
+      `;
+      si.appendChild(d);
+    });
+  }
+
+  // ── INVEST ──
+  else if (mg.type === 'invest') {
+    const allCompanies = [
+      // 저위험 (성공 확률 100%)
+      { name:'☀️ 솔라텍',      risk:'저위험', riskColor:'var(--neon)',  desc:'안정적 태양광 설비 회사. 확실하지만 수익은 낮아요.', mult:1.25, successChance:1.0 },
+      { name:'💧 워터파워',    risk:'저위험', riskColor:'var(--neon)',  desc:'소수력 발전 전문. 꾸준한 배당이 매력.', mult:1.30, successChance:1.0 },
+      { name:'🌿 에코그린',    risk:'저위험', riskColor:'var(--neon)',  desc:'도시 녹화 & 탄소 크레딧 기업. 안전한 선택.', mult:1.20, successChance:1.0 },
+      // 중위험 (성공 확률 50%)
+      { name:'♻️ 그린루프',    risk:'중위험', riskColor:'var(--amber)', desc:'폐기물 에너지 전환 기업. 반반의 도박.', mult:1.7, successChance:0.5 },
+      { name:'🔋 배터리넥스트', risk:'중위험', riskColor:'var(--amber)', desc:'차세대 ESS 스타트업. 성공하면 짭짤!', mult:1.8, successChance:0.5 },
+      { name:'🌊 타이달에너지', risk:'중위험', riskColor:'var(--amber)', desc:'조력 발전 신기술. 변수가 많습니다.', mult:1.75, successChance:0.5 },
+      // 고위험 (성공 확률 5%)
+      { name:'🌬️ 윈드코어',    risk:'고위험', riskColor:'var(--red)',   desc:'혁신 풍력 스타트업. 터질 듯한 기대감!', mult:2.0, successChance:0.05 },
+      { name:'🔥 퓨전파워',    risk:'고위험', riskColor:'var(--red)',   desc:'핵융합 에너지 투자. 꿈만 같은 수익률!', mult:2.5, successChance:0.05 },
+      { name:'🚀 오비탈솔라',  risk:'고위험', riskColor:'var(--red)',   desc:'우주 태양광 위성 프로젝트. 로망을 사세요.', mult:3.0, successChance:0.05 },
+    ];
+    const low  = allCompanies.filter(c => c.risk === '저위험').sort(() => Math.random()-.5)[0];
+    const mid  = allCompanies.filter(c => c.risk === '중위험').sort(() => Math.random()-.5)[0];
+    const high = allCompanies.filter(c => c.risk === '고위험').sort(() => Math.random()-.5)[0];
+    const companies = [low, mid, high];
+
+    const invest = Math.max(10, Math.floor(GS.gold * 0.5));
+    document.getElementById('mg-intro').textContent = `현재 Gold: ${GS.gold} | 투자금: ${invest} Gold — 어느 기업에 투자할까요?`;
+    document.getElementById('mg-content').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px">
+        ${companies.map((c,i)=>{
+          const used = !!GS.investUsed[c.name];
+          return `
+          <div class="choice-btn${used?' locked':''}" ${used?'':'onclick="doInvest('+i+')"'} style="cursor:${used?'not-allowed':'pointer'};opacity:${used?0.4:1}">
+            <div class="choice-title">${c.name} <span style="font-size:10px;font-weight:700;color:${c.riskColor}">[${c.risk}]</span>${used?' <span style="font-size:9px;color:var(--muted)">✓ 투자 완료</span>':''}</div>
+            <div class="choice-effect">${c.desc} — 성공 확률 <b>${Math.round(c.successChance*100)}%</b> · 성공 시 <b>${c.mult}배</b> 반환</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div id="invest-result"></div>
+    `;
+    window._investCompanies = companies;
+    window._investMg = mg;
+  }
+}
+
+function answerQuiz(idx) {
+  if (quizState.answered) return;
+  quizState.answered = true;
+  const correct = idx === quizState.q.ans;
+  document.getElementById(`qopt-${idx}`).classList.add(correct ? 'correct' : 'wrong');
+  if (!correct) document.getElementById(`qopt-${quizState.q.ans}`).classList.add('correct');
+  const earned = correct ? 30 : 0;
+  if (earned) { GS.gold += earned; GS.score += 15; }
+  GS.mgUsed[quizState.mg.id] = true;
+  document.getElementById('mg-result').innerHTML = `
+    <span style="color:${correct?'var(--neon)':'var(--red)'};font-weight:700">${correct?`🎉 정답! +${earned} Gold`:'❌ 오답!'}</span>
+    <br><button class="mg-continue" onclick="closeMg()">닫기</button>
+  `;
+  addLog(`❓ 퀴즈 ${correct?'정답':'오답'}! ${earned>0?`+${earned} Gold`:''}`, correct?'good':'bad');
+  updateUI();
+}
+
+window.sortAnswer = function(idx, chosen, correct, total) {
+  const right = chosen === correct;
+  const btns = document.querySelectorAll(`[id^="sort-${idx}-"]`);
+  btns.forEach(b => b.onclick = null);
+  document.getElementById(`sort-${idx}-${chosen}`).classList.add(right ? 'correct' : 'wrong');
+  if (!right) document.getElementById(`sort-${idx}-${correct}`).classList.add('correct');
+  if (right) window._sortScore++;
+  window._sortAnswered++;
+  if (window._sortAnswered >= window._sortTotal) {
+    const earned = window._sortScore * 20;
+    GS.gold += earned; GS.score += window._sortScore * 10;
+    GS.mgUsed[window._sortMg.id] = true;
+    document.getElementById('sort-result').innerHTML = `
+      <span style="color:var(--gold);font-weight:700">${window._sortScore}/${window._sortTotal} 정답! +${earned} Gold</span>
+      <br><button class="mg-continue" onclick="closeMg()">닫기</button>
+    `;
+    addLog(`🗑️ 분리수거 ${window._sortScore}/${window._sortTotal}! +${earned} Gold`, 'good');
+    updateUI();
+  }
+};
+
+window.doInvest = function(idx) {
+  const c = window._investCompanies[idx];
+  const mg = window._investMg;
+  if (GS.investUsed[c.name]) return; // 이미 투자한 항목 방지
+  const invest = Math.max(10, Math.floor(GS.gold * 0.5));
+  const success = Math.random() < c.successChance;
+  GS.investUsed[c.name] = true; // 해당 기업 투자 완료 표시
+
+  if (!success) {
+    GS.gold = Math.max(0, GS.gold - invest);
+    document.getElementById('invest-result').innerHTML = `
+      <span style="color:var(--red);font-weight:700;font-size:15px">💸 ${c.name} 투자 실패!</span>
+      <br><span style="color:var(--red);font-size:13px;font-weight:600">-${invest} Gold 손실 (잔액: ${GS.gold} Gold)</span>
+      <br><small style="color:var(--muted)">운이 나빴네요...</small>
+      <br><button class="mg-continue" onclick="refreshInvestUI()">다른 기업 보기</button>
+      <button class="mg-continue" onclick="closeMg()" style="margin-left:6px;background:var(--border);color:var(--text)">닫기</button>
+    `;
+    addLog(`📉 ${c.name} 투자 실패! -${invest} Gold 손실`, 'bad');
+  } else {
+    const gain = Math.floor(invest * c.mult);
+    GS.gold = GS.gold - invest + gain;
+    GS.score += Math.floor(gain / 5);
+    document.getElementById('invest-result').innerHTML = `
+      <span style="color:var(--neon);font-weight:700;font-size:15px">📈 ${c.name} 성공!</span>
+      <br><span style="color:var(--neon);font-size:13px;font-weight:600">+${gain - invest} Gold 수익 (잔액: ${GS.gold} Gold)</span>
+      <br><button class="mg-continue" onclick="refreshInvestUI()">다른 기업 보기</button>
+      <button class="mg-continue" onclick="closeMg()" style="margin-left:6px;background:var(--border);color:var(--text)">닫기</button>
+    `;
+    addLog(`📈 ${c.name} 투자 성공! +${gain - invest} Gold 수익`, 'good');
+  }
+  GS.mgUsed[mg.id] = true;
+  updateUI();
+  // 투자 UI 새로고침 (버튼 비활성화 반영)
+  window.refreshInvestUI = function() {
+    // mg-intro 및 버튼 상태 갱신
+    const newInvest = Math.max(10, Math.floor(GS.gold * 0.5));
+    document.getElementById('mg-intro').textContent = `현재 Gold: ${GS.gold} | 투자금: ${newInvest} Gold — 다른 기업에도 투자할 수 있어요!`;
+    const companies = window._investCompanies;
+    document.getElementById('mg-content').innerHTML = `
+      <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:10px">
+        ${companies.map((c,i)=>{
+          const used = !!GS.investUsed[c.name];
+          return `
+          <div class="choice-btn${used?' locked':''}" ${used?'':'onclick="doInvest('+i+')"'} style="cursor:${used?'not-allowed':'pointer'};opacity:${used?0.4:1}">
+            <div class="choice-title">${c.name} <span style="font-size:10px;font-weight:700;color:${c.riskColor}">[${c.risk}]</span>${used?' <span style="font-size:9px;color:var(--muted)">✓ 투자 완료</span>':''}</div>
+            <div class="choice-effect">${c.desc} — 성공 확률 <b>${Math.round(c.successChance*100)}%</b> · 성공 시 <b>${c.mult}배</b> 반환</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="text-align:center;margin-top:6px"><button class="mg-continue" onclick="closeMg()" style="background:var(--border);color:var(--text)">닫기</button></div>
+    `;
+  };
+};
+
+function closeMg() {
+  document.getElementById('mg-overlay').classList.add('hidden');
+  renderMinigames();
+}
+
+// ══════════════════════════════════════════════
+//  NEXT TURN
+// ══════════════════════════════════════════════
+function nextTurn() {
+  if (GS.gameOver) return;
+  // 민원 먼저 — 처리 후 applyPetition이 advanceTurn 호출
+  showPetition();
+}
+
+function advanceTurn() {
+  // 랜덤 이벤트
+  const ev = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+  if (ev.gold)   GS.gold   = Math.max(0, GS.gold   + ev.gold);
+  if (ev.power)  GS.power  = clamp(GS.power  + ev.power,  0, 100);
+  if (ev.carbon) GS.carbon = clamp(GS.carbon + ev.carbon, 0, 100);
+  if (ev.happy)  GS.happy  = clamp(GS.happy  + ev.happy,  0, 100);
+  addLog(`${ev.icon} [이벤트] ${ev.msg}`, 'event');
+
+  // 장치 패시브 수익
+  GS.devices.forEach(d => {
+    GS.gold   += Math.floor(d.powerGain * .3);
+    GS.power   = clamp(GS.power  + Math.floor(d.powerGain    * .05), 0, 100);
+    GS.carbon  = clamp(GS.carbon - Math.floor(d.carbonReduce * .05), 0, 100);
+  });
+  if (GS.devices.length > 0) addLog(`⚙️ 장치 ${GS.devices.length}개 패시브 수익 발생`, 'info');
+
+  GS.score += Math.floor(clamp(GS.happy, 0, 100) / 2);
+  GS.turn++;
+  GS.petitionDone = false;
+  GS.mgUsed = {};
+  GS.investUsed = {};   // ← 턴마다 투자 제한 리셋
+  GS.installsThisTurn = 0;
+
+  updateUI();
+  if (GS.turn > GS.maxTurn) { endGame(); return; }
+  addLog(`━━━━ 턴 ${GS.turn} 시작 ━━━━`, 'info');
+  checkWin();
+}
+
+// ══════════════════════════════════════════════
+//  PETITION
+// ══════════════════════════════════════════════
+function showPetition() {
+  const pet = PETITIONS[Math.floor(Math.random() * PETITIONS.length)];
+  document.getElementById('pet-icon').textContent  = pet.icon;
+  document.getElementById('pet-title').textContent = `📢 시민 민원: ${pet.title}`;
+  document.getElementById('pet-body').textContent  = pet.body;
+  const ch = document.getElementById('pet-choices');
+  ch.innerHTML = '';
+  pet.choices.forEach((c, i) => {
+    const btn = document.createElement('div');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `<div class="choice-title">${['A','B'][i]}. ${c.label}</div><div class="choice-effect">${c.desc}</div>`;
+    btn.onclick = () => applyPetition(c.effect, c.label);
+    ch.appendChild(btn);
+  });
+  document.getElementById('petition-overlay').classList.remove('hidden');
+}
+
+function applyPetition(effect, label) {
+  document.getElementById('petition-overlay').classList.add('hidden');
+  effect.split(',').forEach(p => {
+    const [k, v] = p.trim().split(':');
+    const val = parseInt(v);
+    if (k === 'gold')   GS.gold   = Math.max(0, GS.gold   + val);
+    if (k === 'carbon') GS.carbon = clamp(GS.carbon + val, 0, 100);
+    if (k === 'power')  GS.power  = clamp(GS.power  + val, 0, 100);
+    if (k === 'happy')  GS.happy  = clamp(GS.happy  + val, 0, 100);
+  });
+  GS.petitionDone = true;
+  GS.score += 20;
+  addLog(`📋 민원: "${label}"`, 'good');
+  updateUI();
+  // 민원 처리 후 자동으로 이벤트+턴 진행
+  advanceTurn();
+}
+
+// ══════════════════════════════════════════════
+//  WIN CHECK & END GAME
+// ══════════════════════════════════════════════
+function checkWin() {
+  if (GS.carbon <= 0 && GS.power >= 100) {
+    GS.score += 500;
+    endGame(true);
+  }
+}
+
+function endGame(win) {
+  GS.gameOver = true;
+  document.getElementById('btn-next').disabled = true;
+
+  const carbon = clamp(GS.carbon, 0, 100);
+  const power  = clamp(GS.power,  0, 100);
+  const score  = GS.score;
+
+  let emoji, title, rank, body, sdgMsg;
+  if (win) {
+    emoji='🌍'; title='탄소중립 완성!'; rank='🏆 에코 히어로 시장';
+    body='완벽합니다! 탄소 0%, 전력 100% 달성! 당신의 도시는 세계 최초 완전 탄소중립 도시로 기록되었습니다.';
+    sdgMsg='✅ SDG 7 달성 · SDG 11 달성 · SDG 13 달성\nUN SDGs 세 가지 목표를 동시에 달성한 모범 사례입니다!';
+  } else if (score >= 800) {
+    emoji='🌱'; title='거의 다 왔어요!'; rank='🥈 그린 챔피언 시장';
+    body='아쉽게 완전 달성은 못했지만 도시를 크게 변화시켰습니다. 조금만 더!';
+    sdgMsg='🟡 SDG 7 진행 중 · SDG 13 일부 달성';
+  } else if (score >= 400) {
+    emoji='🌿'; title='초록 길을 걷다'; rank='🥉 에코 스타트 시장';
+    body='작은 변화를 이뤄냈습니다. 미니게임과 장치를 더 활용해보세요!';
+    sdgMsg='🟡 SDG 7 초기 단계 — 더 많은 투자가 필요합니다.';
+  } else if (score >= 100) {
+    emoji='🏗️'; title='아직 공사 중...'; rank='⚠️ 공사 중 시장';
+    body='도시 전환이 느렸습니다. 미니게임으로 Gold를 먼저 확보하세요!';
+    sdgMsg='🔴 SDG 목표 달성 실패 — 재도전해보세요!';
+  } else {
+    emoji='💸'; title='예산 바닥...'; rank='💀 파산 시장';
+    body='예산이 바닥났습니다. 미니게임 Gold를 먼저 모아 장치를 설치하세요!';
+    sdgMsg='🔴 SDGs 달성 실패 — 처음부터 다시 시작하세요.';
+  }
+
+  document.getElementById('end-emoji').textContent  = emoji;
+  document.getElementById('end-title').textContent  = title;
+  document.getElementById('end-rank').textContent   = rank;
+  document.getElementById('end-body').textContent   = body;
+  document.getElementById('end-sdg').textContent    = sdgMsg;
+  document.getElementById('end-score').textContent  = score;
+  document.getElementById('end-carbon').textContent = `${carbon}%`;
+  document.getElementById('end-power').textContent  = `${power}%`;
+  document.getElementById('ending-overlay').classList.remove('hidden');
+}
+</script>
+</body>
+</html>
